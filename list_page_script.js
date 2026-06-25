@@ -1,36 +1,48 @@
 /**
- * NetBrain Priority Score Injector — List Page
+ * NetBrain Priority Score Injector â List Page + Details Page
  * Hosted at: https://github.com/Evan-Bi/netbrain-ps-data/blob/main/list_page_script.js
  * Served via: https://cdn.jsdelivr.net/gh/Evan-Bi/netbrain-ps-data@main/list_page_script.js
  *
- * To deploy changes: push this file to GitHub. jsDelivr CDN picks it up automatically.
- * No InSided admin changes needed.
+ * To deploy changes: push this file to GitHub (reference copy).
+ * Admin bodyEnd has the full script â update via InSided admin UI to go live.
  *
  * How it works:
- *   1. Runs only on /ideas (list page)
- *   2. Reads score map from sessionStorage or fetches from GitHub JSON
- *   3. Injects a score block BELOW the vote button on each idea card
- *      using a position:fixed overlay div (no id) appended to document.body
- *   4. MutationObserver re-injects when InSided SPA re-renders cards
- *   5. ov() checks document.body.contains(_ov) — if Preact hydration detaches
- *      our container, it is recreated transparently (root cause fix)
- *   6. Capture-phase click listener provides optimistic score update on vote
+ *   LIST PAGE (/ideas):
+ *   1. Reads score map from sessionStorage or fetches from GitHub JSON
+ *   2. Injects a score block BELOW the vote button on each idea card
+ *      using a position:fixed overlay div appended to document.body
+ *   3. MutationObserver re-injects when InSided SPA re-renders cards
+ *   4. ov() checks document.body.contains(_ov) â recreates if detached
+ *   5. Capture-phase click listener: optimistic score update on vote
+ *
+ *   DETAILS PAGE (/ideas/xxx-yyy-zzz-NNN):
+ *   1. injDetails(): appends inline PS badge inside .ideation-topic-votes-wrapper
+ *      (appears after the vote button and voter avatars, same row â flex layout)
+ *   2. Capture-phase click listener: optimistic score update for inline badge
+ *   3. Existing right-side widget (if present) is untouched
  *
  * Score data:
  *   https://raw.githubusercontent.com/Evan-Bi/netbrain-ps-data/main/ps_scores.json
  *   Format: { "topicId": score }  e.g. { "100": 20 }
  *
  * Colour tiers:
- *   score >= 70  → orange  #E65100
- *   score >= 40  → amber   #F9A825
- *   score  < 40  → blue    #1565C0
+ *   score >= 70  â orange  #E65100
+ *   score >= 40  â amber   #F9A825
+ *   score  < 40  â blue    #1565C0
  *
  * Tier vote weights:  Tier 0=30, Tier 1=20, Tier 2=10, Tier 3=10, unknown=10
  * sessionStorage TTL: 15 minutes
+ *
+ * â ï¸ InSided strips ALL backslashes on save.
+ *    Use [0-9] not \d, [ ]* not \s*, [A-Za-z0-9_] not \w â everywhere.
  */
 (function(){
 "use strict";
-if(window.location.pathname!=="/ideas")return;
+var _p=window.location.pathname;
+var _isList=(_p==="/ideas");
+var _isDetails=(_p.indexOf("/ideas/")===0&&_p.length>7);
+if(!_isList&&!_isDetails)return;
+
 var U="https://raw.githubusercontent.com/Evan-Bi/netbrain-ps-data/main/ps_scores.json";
 var SM="nb_ps_map",ST="nb_ps_ts",TTL=900000;
 var _m=null,_t=0;
@@ -77,11 +89,13 @@ function fsm(){
     .catch(function(){return _m||{};});
 }
 
-// -- Overlay container
-// No id: avoids conflicts with InSided's own elements.
-// Checks document.body.contains(_ov) each call: Preact hydration may detach
-// our container. If detached, recreate it and clear _bl so inj() rebuilds all
-// score blocks into the fresh container.
+// -- Shared cache warm-up (runs on both page types)
+var _cv=sr();if(_cv){_m=_cv.map;_t=_cv.ts;}
+
+// ==================== LIST PAGE ====================
+if(_isList){
+
+// -- Overlay container (position:fixed, appended to body)
 var _ov=null;
 function ov(){
   if(!_ov||!document.body.contains(_ov)){
@@ -174,8 +188,6 @@ function upov(id,sc){
 }
 
 // -- Capture-phase click: fires BEFORE Preact handles vote
-// preact_voted present = already voted (click = unvote)
-// preact_voted absent  = not voted   (click = vote)
 document.addEventListener("click",function(e){
   var btn=e.target.closest("button.qa-topic-meta-likes-icon");
   if(!btn)return;
@@ -188,7 +200,7 @@ document.addEventListener("click",function(e){
   if(!mv)return;
   var id=parseInt(mv[1],10);
   var role=(window.inSidedData&&window.inSidedData.user)?window.inSidedData.user.role:null;
-  var tm=role?role.match(/Tier\s*([0-9]+)/i):null;
+  var tm=role?role.match(/Tier[ ]*([0-9]+)/i):null;
   var tier=tm?parseInt(tm[1],10):null;
   var weight=(tier!==null&&TW[tier]!==undefined)?TW[tier]:DW;
   var delta=isVoting?weight:-weight;
@@ -228,9 +240,6 @@ function obs(){
   }).observe(document.body,{childList:true,subtree:true});
 }
 
-// -- Boot
-var cv=sr();if(cv){_m=cv.map;_t=cv.ts;}
-
 function boot(){run();obs();}
 
 if(document.readyState==="loading"){
@@ -243,5 +252,80 @@ if(document.readyState==="loading"){
 setTimeout(run,1500);
 setTimeout(run,4000);
 var _ri=0,_ric=setInterval(function(){_ri++;run();if(_ri>=4)clearInterval(_ric);},5000);
+
+} // end if(_isList)
+
+// ==================== DETAILS PAGE ====================
+if(_isDetails){
+
+// -- Inject inline PS badge into vote wrapper row
+// .ideation-topic-votes-wrapper is display:flex flex-direction:row
+// Badge appended as last flex child, same height as vote button (48px)
+function injDetails(sm){
+  var mv=window.location.href.match(/-([0-9]+)$/);
+  if(!mv)return;
+  var id=parseInt(mv[1],10);
+  var sc=sm[id];
+  if(sc===undefined)return;
+  var wrapper=document.querySelector(".ideation-topic-votes-wrapper");
+  if(!wrapper){setTimeout(function(){fsm().then(injDetails);},600);return;}
+  if(wrapper.querySelector(".nb-ps-inline"))return;
+  var cl=col(sc);
+  var badge=document.createElement("div");
+  badge.className="nb-ps-inline";
+  badge.style.cssText=
+    "display:flex;align-items:center;justify-content:center;flex-direction:column;" +
+    "background:"+cl.bg+";color:"+cl.tx+";" +
+    "border-radius:4px;padding:0 14px;font-size:11px;font-weight:700;" +
+    "text-align:center;white-space:nowrap;cursor:default;line-height:1.3;" +
+    "margin-left:8px;min-width:52px;";
+  badge.innerHTML=
+    "<span style='font-size:16px;font-weight:800;'>"+sc+"</span>" +
+    "<span style='font-size:10px;opacity:0.9;'>Priority Score</span>";
+  wrapper.appendChild(badge);
+}
+
+// -- Capture-phase click: optimistic update for inline badge
+document.addEventListener("click",function(e){
+  var btn=e.target.closest("button.qa-topic-meta-likes-icon");
+  if(!btn)return;
+  var isVoting=!btn.classList.contains("preact_voted");
+  var mv=window.location.href.match(/-([0-9]+)$/);
+  if(!mv)return;
+  var id=parseInt(mv[1],10);
+  var role=(window.inSidedData&&window.inSidedData.user)?window.inSidedData.user.role:null;
+  var tm=role?role.match(/Tier[ ]*([0-9]+)/i):null;
+  var tier=tm?parseInt(tm[1],10):null;
+  var weight=(tier!==null&&TW[tier]!==undefined)?TW[tier]:DW;
+  var delta=isVoting?weight:-weight;
+  if(!_m)return;
+  var cur=(_m[id]!==undefined)?_m[id]:0;
+  var ns=cur+delta;
+  _m[id]=ns;
+  sw(_m);
+  var badge=document.querySelector(".nb-ps-inline");
+  if(badge){
+    var cl=col(ns);
+    badge.style.background=cl.bg;
+    badge.style.color=cl.tx;
+    badge.innerHTML=
+      "<span style='font-size:16px;font-weight:800;'>"+ns+"</span>" +
+      "<span style='font-size:10px;opacity:0.9;'>Priority Score</span>";
+  }
+},true);
+
+function runD(){fsm().then(injDetails);}
+
+if(document.readyState==="loading"){
+  document.addEventListener("DOMContentLoaded",runD);
+}else{
+  runD();
+}
+
+// -- Retries for late Preact render
+setTimeout(runD,1000);
+setTimeout(runD,3000);
+
+} // end if(_isDetails)
 
 })();
