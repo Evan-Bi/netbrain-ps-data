@@ -16,8 +16,10 @@
  *   5. Capture-phase click listener: optimistic score update on vote
  *
  *   DETAILS PAGE (/ideas/xxx-yyy-zzz-NNN):
- *   1. injDetails(): appends inline PS badge inside .ideation-topic-votes-wrapper
- *      (appears after the vote button and voter avatars, same row â flex layout)
+ *   1. injDetails(): inserts inline PS badge BEFORE .topic-voted-users inside
+ *      .ideation-topic-votes-wrapper (flex row):
+ *      [Upvote button] [PS badge] [voter avatars]
+ *      Always blue (#1565C0). Label: "Points" (matches list page).
  *   2. Capture-phase click listener: optimistic score update for inline badge
  *   3. Existing right-side widget (if present) is untouched
  *
@@ -260,7 +262,9 @@ if(_isDetails){
 
 // -- Inject inline PS badge into vote wrapper row
 // .ideation-topic-votes-wrapper is display:flex flex-direction:row
-// Badge appended as last flex child, same height as vote button (48px)
+// Badge inserted BEFORE .topic-voted-users (voter avatars):
+//   [Upvote button] [Priority Score badge] [voter avatars]
+// Always blue (#1565C0) â no colour change on score value
 function injDetails(sm){
   var mv=window.location.href.match(/-([0-9]+)$/);
   if(!mv)return;
@@ -270,19 +274,19 @@ function injDetails(sm){
   var wrapper=document.querySelector(".ideation-topic-votes-wrapper");
   if(!wrapper){setTimeout(function(){fsm().then(injDetails);},600);return;}
   if(wrapper.querySelector(".nb-ps-inline"))return;
-  var cl=col(sc);
   var badge=document.createElement("div");
   badge.className="nb-ps-inline";
   badge.style.cssText=
     "display:flex;align-items:center;justify-content:center;flex-direction:column;" +
-    "background:"+cl.bg+";color:"+cl.tx+";" +
+    "background:#1565C0;color:#FFFFFF;" +
     "border-radius:4px;padding:0 14px;font-size:11px;font-weight:700;" +
     "text-align:center;white-space:nowrap;cursor:default;line-height:1.3;" +
     "margin-left:8px;min-width:52px;";
   badge.innerHTML=
     "<span style='font-size:16px;font-weight:800;'>"+sc+"</span>" +
-    "<span style='font-size:10px;opacity:0.9;'>Priority Score</span>";
-  wrapper.appendChild(badge);
+    "<span style='font-size:10px;opacity:0.9;'>Points</span>";
+  var voterDiv=wrapper.querySelector(".topic-voted-users");
+  if(voterDiv){wrapper.insertBefore(badge,voterDiv);}else{wrapper.appendChild(badge);}
 }
 
 // -- Capture-phase click: optimistic update for inline badge
@@ -305,19 +309,16 @@ document.addEventListener("click",function(e){
   sw(_m);
   var badge=document.querySelector(".nb-ps-inline");
   if(badge){
-    var cl=col(ns);
-    badge.style.background=cl.bg;
-    badge.style.color=cl.tx;
     badge.innerHTML=
       "<span style='font-size:16px;font-weight:800;'>"+ns+"</span>" +
-      "<span style='font-size:10px;opacity:0.9;'>Priority Score</span>";
+      "<span style='font-size:10px;opacity:0.9;'>Points</span>";
   }
 },true);
 
 function runD(){fsm().then(injDetails);}
 
 if(document.readyState==="loading"){
-  document.addEventListener("DOMContentLoaded",runD);
+    document.addEventListener("DOMContentLoaded",runD);
 }else{
   runD();
 }
