@@ -1,10 +1,10 @@
 /**
- * NetBrain Priority Score Injector â List Page + Details Page
+ * NetBrain Priority Score Injector — List Page + Details Page
  * Hosted at: https://github.com/Evan-Bi/netbrain-ps-data/blob/main/list_page_script.js
  * Served via: https://cdn.jsdelivr.net/gh/Evan-Bi/netbrain-ps-data@main/list_page_script.js
  *
  * To deploy changes: push this file to GitHub (reference copy).
- * Admin bodyEnd has the full script â update via InSided admin UI to go live.
+ * Admin bodyEnd has the full script — update via InSided admin UI to go live.
  *
  * How it works:
  *   LIST PAGE (/ideas):
@@ -12,7 +12,7 @@
  *   2. Injects a score block BELOW the vote button on each idea card
  *      using a position:fixed overlay div appended to document.body
  *   3. MutationObserver re-injects when InSided SPA re-renders cards
- *   4. ov() checks document.body.contains(_ov) â recreates if detached
+ *   4. ov() checks document.body.contains(_ov) — recreates if detached
  *   5. Capture-phase click listener: optimistic score update on vote
  *
  *   DETAILS PAGE (/ideas/xxx-yyy-zzz-NNN):
@@ -28,15 +28,15 @@
  *   Format: { "topicId": score }  e.g. { "100": 20 }
  *
  * Colour tiers:
- *   score >= 70  â orange  #E65100
- *   score >= 40  â amber   #F9A825
- *   score  < 40  â blue    #1565C0
+ *   score >= 70  → orange  #E65100
+ *   score >= 40  → amber   #F9A825
+ *   score  < 40  → blue    #1565C0
  *
  * Tier vote weights:  Tier 0=30, Tier 1=20, Tier 2=10, Tier 3=10, unknown=10
  * sessionStorage TTL: 15 minutes
  *
- * â ï¸ InSided strips ALL backslashes on save.
- *    Use [0-9] not \d, [ ]* not \s*, [A-Za-z0-9_] not \w â everywhere.
+ * ⚠️ InSided strips ALL backslashes on save.
+ *    Use [0-9] not \d, [ ]* not \s*, [A-Za-z0-9_] not \w — everywhere.
  */
 (function(){
 "use strict";
@@ -264,16 +264,16 @@ if(_isDetails){
 // .ideation-topic-votes-wrapper is display:flex flex-direction:row
 // Badge inserted BEFORE .topic-voted-users (voter avatars):
 //   [Upvote button] [Priority Score badge] [voter avatars]
-// Always blue (#1565C0) â no colour change on score value
+// Always blue (#1565C0) — no colour change on score value
 function injDetails(sm){
   var mv=window.location.href.match(/-([0-9]+)$/);
   if(!mv)return;
   var id=parseInt(mv[1],10);
   var sc=sm[id];
   if(sc===undefined)return;
-  var wrapper=document.querySelector(".ideation-topic-votes-wrapper");
-  if(!wrapper){setTimeout(function(){fsm().then(injDetails);},600);return;}
-  if(wrapper.querySelector(".nb-ps-inline"))return;
+  var vw=document.querySelector(".ideation-topic-votes-wrapper");
+  if(!vw){setTimeout(function(){fsm().then(injDetails);},600);return;}
+  if(vw.querySelector(".nb-ps-inline"))return;
   var badge=document.createElement("div");
   badge.className="nb-ps-inline";
   badge.style.cssText=
@@ -285,8 +285,8 @@ function injDetails(sm){
   badge.innerHTML=
     "<span style='font-size:16px;font-weight:800;'>"+sc+"</span>" +
     "<span style='font-size:10px;opacity:0.9;'>Points</span>";
-  var voterDiv=wrapper.querySelector(".topic-voted-users");
-  if(voterDiv){wrapper.insertBefore(badge,voterDiv);}else{wrapper.appendChild(badge);}
+  var voterDiv=vw.querySelector(".topic-voted-users");
+  if(voterDiv){vw.insertBefore(badge,voterDiv);}else{vw.appendChild(badge);}
 }
 
 // -- Capture-phase click: optimistic update for inline badge
@@ -313,6 +313,13 @@ document.addEventListener("click",function(e){
       "<span style='font-size:16px;font-weight:800;'>"+ns+"</span>" +
       "<span style='font-size:10px;opacity:0.9;'>Points</span>";
   }
+  // Preact re-renders wrapper after vote, removing our badge.
+  // Re-inject 300ms later if badge is gone.
+  setTimeout(function(){
+    if(!document.querySelector(".nb-ps-inline")){
+      if(_m)injDetails(_m);
+    }
+  },300);
 },true);
 
 function runD(){fsm().then(injDetails);}
